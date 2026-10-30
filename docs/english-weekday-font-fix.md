@@ -27,7 +27,9 @@ python -m unittest discover -s tests -p test_date_font.py -v
 
 Generation was checked with Pillow 12.3.0. Original 26 px size, weight 400,
 34 px line height and 8 px baseline are preserved. The bitmap grows by 951 bytes.
-CI also checks C compilation against the pinned LVGL 8.4.0 headers.
+Regeneration is deterministic with the same rasterizer; FreeType builds on different
+operating systems can produce slightly different edge pixels. CI checks the same
+character coverage and line metrics as well as C compilation against LVGL 8.4.0.
 
 After building and installing firmware, validate English TU and TH on the device,
 then all other weekdays and the German abbreviations. Installing a theme alone
