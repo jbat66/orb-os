@@ -21,6 +21,13 @@ PlatformIO Python alone. Variable fonts take a weight.
     chars   the characters to include, literally (UTF-8). Keep it to what the screen
             draws: every glyph costs flash, and a glyph that is not here draws nothing.
 
+Regenerate the clock date font (all English and German weekday letters):
+    python tools/gen_lv_font.py assets/fonts/Sora-Variable.ttf 26 400 font_sora_26 "0123456789ADEFHIMORSTUW" src/font_sora_26.c
+
+Generated C fonts reject characters outside their cmaps before entering LVGL's lookup.
+LVGL 8.4.0 accepts the first code point beyond a FORMAT0_TINY range, which can read
+past the glyph table. A missing character must instead allow normal fallback handling.
+
 Example (the forecast screen's temperature):
     python tools/gen_lv_font.py Sora.ttf 120 300 font_sora_120 "0123456789-°" src/font_sora_120.c
 """
@@ -172,9 +179,28 @@ def main():
         f"    .kern_dsc = NULL, .kern_scale = 0, .cmap_num = {len(rs)}, .bpp = 4,",
         "    .kern_classes = 0, .bitmap_format = 0, .cache = &cache",
         "};", "",
+        "/* LVGL 8.4.0's fmt_txt lookup accepts rcp == range_length. Guard missing",
+        " * characters before it can read the next glyph, possibly past glyph_dsc. */",
+        "static bool has_glyph(uint32_t letter) {",
+        "    if(letter == '\t') letter = ' ';",
+        "    for(uint16_t i = 0; i < font_dsc.cmap_num; ++i) {",
+        "        uint32_t relative = letter - cmaps[i].range_start;",
+        "        if(relative < cmaps[i].range_length) return true;",
+        "    }",
+        "    return false;",
+        "}", "",
+        "static bool get_glyph_dsc(const lv_font_t *font, lv_font_glyph_dsc_t *dsc,",
+        "                          uint32_t letter, uint32_t next) {",
+        "    if(!has_glyph(letter)) return false;",
+        "    return lv_font_get_glyph_dsc_fmt_txt(font, dsc, letter, next);",
+        "}", "",
+        "static const uint8_t *get_glyph_bitmap(const lv_font_t *font, uint32_t letter) {",
+        "    if(!has_glyph(letter)) return NULL;",
+        "    return lv_font_get_bitmap_fmt_txt(font, letter);",
+        "}", "",
         f"const lv_font_t {name} = {{",
-        "    .get_glyph_dsc = lv_font_get_glyph_dsc_fmt_txt,",
-        "    .get_glyph_bitmap = lv_font_get_bitmap_fmt_txt,",
+        "    .get_glyph_dsc = get_glyph_dsc,",
+        "    .get_glyph_bitmap = get_glyph_bitmap,",
         f"    .line_height = {fb_lh if fallback else ascent + descent}, .base_line = {fb_bl if fallback else descent},",
         "    .subpx = LV_FONT_SUBPX_NONE, .underline_position = -2, .underline_thickness = 1,",
         f"    .dsc = &font_dsc, .fallback = {'&' + fallback if fallback else 'NULL'}, .user_data = NULL,",
